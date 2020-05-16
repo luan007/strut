@@ -10,9 +10,31 @@ var path = require("path");
 var realm_path = config.realm_path;
 var realms = {};
 
+function setup_services_env(realm_name, full_path, service) {
+    var srv_path = path.resolve(full_path, service);
+    var data_path = path.resolve(srv_path, "data");
+    if (!fs.existsSync(srv_path)) {
+        fs.mkdirSync(srv_path);
+    }
+    if (!fs.existsSync(data_path)) {
+        fs.mkdirSync(data_path);
+    }
+    var fin = {
+        path: srv_path,
+        data_path: data_path,
+        config: diskjson.create(srv_path,  "config", {}, true).data,
+        vars: diskjson.create(srv_path, "vars", {}, true).data
+    };
+    return fin;
+}
+
 function load_realm(realm_name, full_path, obj) {
     obj.config = diskjson.create(full_path, "config", {}, true).data;
-    obj.vars = diskjson.create(full_path, "vars", {}, true).data;
+    obj.global_vars = diskjson.create(full_path, "global_vars", {}, true).data;
+    obj.service_data = {};
+    for (var i in obj.config.services) {
+        obj.service_data[i] = setup_services_env(realm_name, full_path, i);
+    }
     obj.state = 1;
     console.log("realm", realm_name, "loaded")
 }

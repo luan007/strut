@@ -8,8 +8,8 @@ const app = require('express')();
 const server = require('http').Server(app);
 const io = require('socket.io')(server);
 
-require("./realm").collect_realms();
 require("./service").collect_services();
+require("./realm").collect_realms();
 
 server.listen(config.port);
 console.log("Server Starting", config.port);

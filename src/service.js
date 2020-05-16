@@ -5,7 +5,7 @@ var diskjson = require("./lib/diskjson")
 var service_path = config.service_path;
 
 var services = {
-
+    
 };
 
 function load_service(service_name, full_path, obj) {
