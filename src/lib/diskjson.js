@@ -1,44 +1,40 @@
-var STATS = {
-    IO: 0
-};
-
 var observer = require('./observer');
 var event = require('eventemitter2').EventEmitter2;
-var PATH = process.cwd() + '/db/';
-var THROTTLE = 100;
-var THROTTLE_DUMP = 500;
 var fs = require('fs');
-try {
-    fs.mkdirSync(PATH);
-} catch (e) {
-    // console.warn("mkdir failed", e);
-}
 
-module.exports = function (name, default_val, readable) {
+var all_disks = {};
+
+module.exports.all = all_disks;
+
+function create(path, name, default_val, readable) {
+
+    var file = require('path').resolve(path, name + ".data.json");
+    if (all_disks[file]) {
+        return all_disks[file];
+    }
 
     readable = readable == undefined ? true : readable;
     var self = {
         data: default_val || {},
         event: new event({
             wildcard: true
-        })
+        }),
+        reload: load_from_file
+        // destroy: dispose_object <-- you may not destroy while running
     };
 
-    var file = PATH + name + ".json";
-
-    var _throttle = 0;
-
-    function throttle(work) {
-        clearTimeout(_throttle);
-        _throttle = setTimeout(work, THROTTLE);
+    function dispose_object() {
+        self.data.unobserve();
     }
+
+
 
     function watch_obj() {
         if (self.data.observe) return;
         self.data = observer.Observable.from(self.data);
         self.data.observe(changes => {
             self.event.emit("observe", changes);
-            throttle(write_to_file);
+            write_to_file();
         });
     }
 
@@ -57,6 +53,7 @@ module.exports = function (name, default_val, readable) {
         watch_obj();
     }
 
+    //TODO: throttle write_to_file for better IO
     function write_to_file() {
         var _data_string = JSON.stringify(self.data);
         if (readable) {
@@ -66,49 +63,20 @@ module.exports = function (name, default_val, readable) {
             if (fs.existsSync(file)) {
                 if (fs.readFileSync(file).toString() != _data_string) {
                     fs.renameSync(file, file + ".bk");
-                    STATS.IO++;
                 }
             }
         } catch (e) {
-            //backup failed
         }
         try {
             fs.writeFileSync(file, _data_string);
-            STATS.IO++;
         } catch (e) {
-            //write failed
         }
     }
 
     load_from_file();
+    all_disks[file] = self;
     return self;
 }
 
-module.exports.dump = function (name, observable_obj, readable) {
 
-    readable = readable == undefined ? true : readable;
-    var file = PATH + name + ".dump.json";
-    var _throttle = 0;
-
-    function throttle(work) {
-        clearTimeout(_throttle);
-        _throttle = setTimeout(work, THROTTLE_DUMP);
-    }
-    observable_obj.observe(changes => {
-        throttle(write_to_file);
-    });
-
-    function write_to_file() {
-        var _data_string = JSON.stringify(observable_obj);
-        if (readable) {
-            _data_string = JSON.stringify(observable_obj, "\t", 4);
-        }
-        try {
-            fs.writeFileSync(file, _data_string);
-            STATS.IO++;
-        } catch (e) {
-            //write failed
-        }
-    }
-}
-module.exports.STATS = STATS;
+module.exports.create = create;
