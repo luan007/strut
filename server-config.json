@@ -1,4 +1,5 @@
 {
     "port": 8099,
-    "realm_path": "realms/"
+    "realm_path": "realms/",
+    "service_path": "services/"
 }

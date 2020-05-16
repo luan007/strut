@@ -6,9 +6,9 @@ var all_disks = {};
 
 module.exports.all = all_disks;
 
-function create(path, name, default_val, readable) {
+function create(path, name, default_val, readable, is_config) {
 
-    var file = require('path').resolve(path, name + ".data.json");
+    var file = require('path').resolve(path, name + (is_config ? "" : ".data") + ".json");
     if (all_disks[file]) {
         return all_disks[file];
     }
@@ -26,8 +26,6 @@ function create(path, name, default_val, readable) {
     function dispose_object() {
         self.data.unobserve();
     }
-
-
 
     function watch_obj() {
         if (self.data.observe) return;
