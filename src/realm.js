@@ -49,13 +49,15 @@ function load_realm(realm_name, full_path, obj) {
     obj.service_data = {};
     for (var i in obj.config.services) {
         obj.service_data[i] = setup_service_env(realm_name, full_path, i);
-        try {
-            realms_service_instances[realm_name][i] =
-                realms_service_instances[realm_name][i] ||
-                service.subprograms[i].instance(obj, obj.service_data[i], service.services[i])
-        } catch (e) {
-            console.error("Error: Instancing <", i, "> for [", realm_name, " ] failed")
-            console.log(e)
+        if (obj.config.services[i].enabled) {
+            try {
+                realms_service_instances[realm_name][i] =
+                    realms_service_instances[realm_name][i] ||
+                    service.subprograms[i].instance(i, obj, service.services)
+            } catch (e) {
+                console.error("Error: Instancing <", i, "> for [", realm_name, "] failed")
+                // console.log(e)
+            }
         }
     }
     //ensure directory safety
@@ -96,9 +98,6 @@ function create_realm_fs(realm_name, init_cfg, init_vars) {
 function post_init() {
     var public = create_realm_fs("public", {}, {});
     //add services if any
-    for (var i in service.services) {
-        console.log(i);
-    }
     var cfg = public.config;
     cfg.active = 1;
     cfg.services = cfg.services || {};
@@ -161,7 +160,6 @@ var realm_gate = express_routing.use("/:realm_id/*", (req, res, next) => {
     }
 });
 
-
 var realm_router = require("express").Router();
 realm_router.use("/:ns/*", (req, res, next) => {
     //actual route
@@ -190,14 +188,14 @@ realm_router.use("/:ns/*", (req, res, next) => {
             });
         }
         var ep = realms_service_instances[realm_name][srv];
-        if (!ep || !ep.http_transport) {
+        if (!ep || !ep.http_handler) {
             return res.json({
                 error: "service error",
                 message: "API does not exist",
                 code: -500
             });
         }
-        req.ep = ep.http_transport;
+        req.ep = ep.http_handler;
         req.srv = srv;
         return next();
     }
@@ -211,6 +209,13 @@ realm_router.use("/:ns/*", (req, res, next) => {
 });
 
 realm_router.use("/:ns", (req, res, next) => {
+    if(!req.ep || !req.srv) {
+        return res.json({
+            error: "gate error",
+            message: "endpoint not found, if you're trying to access index of a namespace, please make sure you have '/' @ the end",
+            code: -999
+        });
+    }
     res.header("X-Powered-By", "_unfallen_ <" + req.srv + ">")
     return req.ep.handle(req, res, next);
 });
@@ -218,7 +223,14 @@ realm_router.use("/:ns", (req, res, next) => {
 realm_gate.use("/:realm_id", realm_router);
 
 function realm_io_router(realm, socket) {
-    
+    //a socket comes in, turn in this socket to all ava-ns
+    var r_instances = realms_service_instances[realm.name];
+    for(var i in r_instances) {
+        //setup reroute
+        if(r_instances[i].io_handler) {
+            r_instances[i].io_handler(socket);
+        }
+    }
 }
 
 function setup_io_transport(io) {

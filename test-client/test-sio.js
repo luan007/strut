@@ -7,3 +7,5 @@ client.on("connect", ()=>{
 client.on("disconnect", ()=>{
     console.log("Dropped");
 });
+
+client.on("test", console.log)
