@@ -11,6 +11,7 @@ function create(path, name, default_val, readable, is_config, no_hotreload) {
     no_hotreload = no_hotreload || false;
     var file = require('path').resolve(path, name + (is_config ? "" : ".data") + ".json");
     if (all_disks[file]) {
+        // console.log("reuse", file);
         return all_disks[file];
     }
 
@@ -20,8 +21,10 @@ function create(path, name, default_val, readable, is_config, no_hotreload) {
     }
 
     readable = readable == undefined ? true : readable;
+    default_val = default_val || {};
+    //wrapping
     var self = {
-        data: default_val || {},
+        data: default_val,
         event: new event({
             wildcard: true
         }),
@@ -54,7 +57,17 @@ function create(path, name, default_val, readable, is_config, no_hotreload) {
             write_to_file();
         } else {
             try {
-                self.data.root = JSON.parse(fs.readFileSync(file).toString());
+                var new_data = JSON.parse(fs.readFileSync(file).toString());
+                var old_keys = Object.keys(self.data);
+                var new_keys = Object.keys(new_data);
+                var all_keys = [].concat(old_keys, new_keys);
+                all_keys.forEach(v => {
+                    if (new_keys.indexOf(v) == -1) {
+                        delete self.data[v];
+                    } else {
+                        self.data[v] = new_data[v];
+                    }
+                });
             } catch (e) {
                 console.log(e);
                 //read failed
@@ -65,9 +78,9 @@ function create(path, name, default_val, readable, is_config, no_hotreload) {
 
     //TODO: throttle write_to_file for better IO
     function write_to_file() {
-        var _data_string = JSON.stringify(self.data.root);
+        var _data_string = JSON.stringify(self.data);
         if (readable) {
-            _data_string = JSON.stringify(self.data.root, "\t", 4);
+            _data_string = JSON.stringify(self.data, "\t", 4);
         }
         try {
             if (fs.existsSync(file)) {

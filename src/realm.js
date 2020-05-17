@@ -12,15 +12,18 @@ var realm_path = config.realm_path;
 var service = require("./service");
 var realms = {};
 
+
+function ensure_dir(root, dir) {
+    if(!fs.existsSync(path.resolve(root, dir))) {
+        fs.mkdirSync(path.resolve(root, dir))
+    }
+}
+
 function setup_services_env(realm_name, full_path, service) {
     var srv_path = path.resolve(full_path, service);
-    var data_path = path.resolve(srv_path, "data");
-    if (!fs.existsSync(srv_path)) {
-        fs.mkdirSync(srv_path);
-    }
-    if (!fs.existsSync(data_path)) {
-        fs.mkdirSync(data_path);
-    }
+    var data_path = path.resolve(srv_path, 'data');
+    ensure_dir(full_path, service);
+    ensure_dir(srv_path, 'data');
     var fin = {
         path: srv_path,
         data_path: data_path,
@@ -30,16 +33,22 @@ function setup_services_env(realm_name, full_path, service) {
     return fin;
 }
 
+
 function load_realm(realm_name, full_path, obj) {
+    var inited = obj.inited;
     obj.name = realm_name;
+    obj.full_path = full_path;
     obj.config = diskjson.create(full_path, "config", {}, true).data;
     obj.global_vars = diskjson.create(full_path, "global_vars", {}, true).data;
     obj.service_data = {};
-    for (var i in obj.config.root.services) {
+    for (var i in obj.config.services) {
         obj.service_data[i] = setup_services_env(realm_name, full_path, i);
     }
+    //ensure directory safety
+    ensure_dir(full_path, "shared");
     obj.state = 1;
-    console.log("realm", realm_name, "loaded")
+    obj.inited = 1;
+    console.log("realm", realm_name, !inited ? "loaded" : "reloaded");
 }
 
 function create_realm_fs(realm_name, init_cfg, init_vars) {
@@ -54,7 +63,6 @@ function create_realm_fs(realm_name, init_cfg, init_vars) {
             var fp = path.resolve(realm_path, realm_name);
             fs.mkdirSync(fp);
             collect_realms();
-
             var my_realm = realms[realm_name];
             for (var i in init_cfg) {
                 my_realm.config[i] = init_cfg[i];
@@ -73,7 +81,20 @@ function create_realm_fs(realm_name, init_cfg, init_vars) {
 }
 
 function post_init() {
-    var shared = create_realm_fs("shared", {}, {});
+    var public = create_realm_fs("public", {}, {});
+    //add services if any
+    for (var i in service.services) {
+        console.log(i);
+    }
+    var cfg = public.config;
+    cfg.active = 1;
+    cfg.services = cfg.services || {};
+    for (var i in service.services) {
+        cfg.services[i] = cfg.services[i] || {
+            enabled: true
+        };
+    }
+    load_realm("public", public.full_path, public);
 }
 
 function collect_realms() {
@@ -102,17 +123,17 @@ function validate_realm(realm_id) {
 var realm_gate = express_routing.use("/:realm_id/*", (req, res, next) => {
     var r_id = req.params['realm_id'];
     var r = validate_realm(r_id);
-    if (r && r.config && r.config.root.active) {
+    if (r && r.config && r.config.active) {
         req.realm = r;
         return next();
-    } else if (r && r.config && !r.config.root.active) {
+    } else if (r && r.config && !r.config.active) {
         return res.json({
             error: "gate error",
             message: "realm deactivated",
             code: -399
         });
-    } 
-     else {
+    }
+    else {
         return res.json({
             error: "gate error",
             message: "realm not found",
@@ -122,7 +143,6 @@ var realm_gate = express_routing.use("/:realm_id/*", (req, res, next) => {
 });
 
 realm_gate.use("/:realm_id", service.realm_router);
-
 
 
 module.exports.collect_realms = collect_realms;

@@ -16,7 +16,7 @@ function mount(alias, srv) {
 
 function load_service(service_name, full_path, obj) {
     obj.config = diskjson.create(full_path, "config", {}, true, true).data;
-    obj.config.root.mounts = obj.config.root.mounts || [];
+    obj.config.mounts = obj.config.mounts || [];
     obj.state = 1;
     console.log("srv", service_name, "loaded");
     //actually load the thing
@@ -24,7 +24,7 @@ function load_service(service_name, full_path, obj) {
     obj.endpoint = endpoint;
 
     mount(service_name, service_name);
-    obj.config.root.mounts.forEach((v => {
+    obj.config.mounts.forEach((v => {
         mount(v, service_name);
     }));
 }
@@ -34,7 +34,8 @@ function collect_services() {
     r.forEach((v) => {
         services[v] = services[v] || {
             config: {},
-            state: 0
+            state: 0,
+            name: v
         };
         try {
             load_service(v, path.resolve(service_path, v), services[v]);
@@ -66,14 +67,14 @@ realm_router.use("/:ns/*", (req, res, next) => {
         });
     }
     if (req.realm) {
-        if (!(req.realm.config && req.realm.config.root.services[service])) {
+        if (!(req.realm.config && req.realm.config.services[service])) {
             return res.json({
                 error: "gate error",
                 message: "service not found for realm",
                 code: -402
             });
         }
-        if (!(req.realm.config && req.realm.config.root.services[service].enabled)) {
+        if (!(req.realm.config && req.realm.config.services[service].enabled)) {
             return res.json({
                 error: "gate error",
                 message: "service is disabled",
@@ -93,6 +94,7 @@ realm_router.use("/:ns/*", (req, res, next) => {
 });
 
 realm_router.use("/:ns", (req, res, next) => {
+    res.header("X-Powered-By", "_unfallen_ <" + req.ep.name + ">")
     return req.ep.endpoint.router.handle(req, res, next);
 });
 
