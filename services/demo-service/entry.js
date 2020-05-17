@@ -1,8 +1,22 @@
 var express = require('express');
-var service_route = express.Router();
+var io = require('socket.io')();
 
-service_route.get("/a", (req, res) => {
-    res.json({ hello: 1, stuff: req.realm })
-});
+function instance(realm, local, srv) {
+    //closure
+    var service_route = express.Router();
 
-module.exports.router = service_route;
+    service_route.get("/a", (req, res) => {
+        res.json({ hello: 1, stuff: req.realm })
+    });
+
+    var io_connection = (socket) => {
+        socket.emit("hi", 1)
+    };
+
+    return {
+        http_handler: service_route,
+        io_handler: io_connection
+    };
+}
+
+module.exports.instance = instance;

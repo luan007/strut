@@ -15,3 +15,9 @@ service first
 /cv/realm_id/action
 
 
+
+PUBLIC SERVICES
+/public/xxxx/action?
+
+//realtime transfer <>
+sio.of(realm) //share one socket for all services (for best economy?)

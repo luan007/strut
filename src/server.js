@@ -16,15 +16,14 @@ app.use(function (req, res, next) {
     next()
 })
 
-
 var realm = require("./realm");
 var service = require("./service");
 service.collect_services();
 realm.collect_realms();
 realm.post_init();
 
-
 server.listen(config.port);
 console.log("Server Starting on", config.port);
 
 app.use(realm.express_routing);
+realm.setup_io_transport(io);

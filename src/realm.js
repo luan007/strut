@@ -10,42 +10,55 @@ var diskjson = require("./lib/diskjson");
 var path = require("path");
 var realm_path = config.realm_path;
 var service = require("./service");
-var realms = {};
 
+var realms = {};
+var realms_service_instances = {};
 
 function ensure_dir(root, dir) {
-    if(!fs.existsSync(path.resolve(root, dir))) {
+    if (!fs.existsSync(path.resolve(root, dir))) {
         fs.mkdirSync(path.resolve(root, dir))
     }
 }
 
-function setup_services_env(realm_name, full_path, service) {
+function setup_service_env(realm_name, full_path, service) {
     var srv_path = path.resolve(full_path, service);
     var data_path = path.resolve(srv_path, 'data');
+    var shared_path = path.resolve(full_path, 'shared');
     ensure_dir(full_path, service);
     ensure_dir(srv_path, 'data');
+    ensure_dir(full_path, 'shared');
     var fin = {
         path: srv_path,
         data_path: data_path,
+        shared_path: shared_path,
         config: diskjson.create(srv_path, "config", {}, true).data,
         vars: diskjson.create(srv_path, "vars", {}, true).data
     };
+
     return fin;
 }
 
 
 function load_realm(realm_name, full_path, obj) {
     var inited = obj.inited;
+    realms_service_instances[realm_name] = realms_service_instances[realm_name] || {};
     obj.name = realm_name;
     obj.full_path = full_path;
     obj.config = diskjson.create(full_path, "config", {}, true).data;
     obj.global_vars = diskjson.create(full_path, "global_vars", {}, true).data;
     obj.service_data = {};
     for (var i in obj.config.services) {
-        obj.service_data[i] = setup_services_env(realm_name, full_path, i);
+        obj.service_data[i] = setup_service_env(realm_name, full_path, i);
+        try {
+            realms_service_instances[realm_name][i] =
+                realms_service_instances[realm_name][i] ||
+                service.subprograms[i].instance(obj, obj.service_data[i], service.services[i])
+        } catch (e) {
+            console.error("Error: Instancing <", i, "> for [", realm_name, " ] failed")
+            console.log(e)
+        }
     }
     //ensure directory safety
-    ensure_dir(full_path, "shared");
     obj.state = 1;
     obj.inited = 1;
     console.log("realm", realm_name, !inited ? "loaded" : "reloaded");
@@ -119,6 +132,12 @@ function validate_realm(realm_id) {
     return realms[realm_id];
 }
 
+function realm_active(realm_id) {
+    var rm = validate_realm(realm_id);
+    if (!rm) return false;
+    return rm && rm.config && rm.config.active;
+}
+
 //express related
 var realm_gate = express_routing.use("/:realm_id/*", (req, res, next) => {
     var r_id = req.params['realm_id'];
@@ -126,7 +145,7 @@ var realm_gate = express_routing.use("/:realm_id/*", (req, res, next) => {
     if (r && r.config && r.config.active) {
         req.realm = r;
         return next();
-    } else if (r && r.config && !r.config.active) {
+    } else if (!realm_active(r_id)) {
         return res.json({
             error: "gate error",
             message: "realm deactivated",
@@ -142,12 +161,88 @@ var realm_gate = express_routing.use("/:realm_id/*", (req, res, next) => {
     }
 });
 
-realm_gate.use("/:realm_id", service.realm_router);
+
+var realm_router = require("express").Router();
+realm_router.use("/:ns/*", (req, res, next) => {
+    //actual route
+    var srv = service.mounts[req.params['ns']];
+    var realm_name = req.realm.name;
+    if (!srv || !realm_name) {
+        return res.json({
+            error: "gate error",
+            message: "service (or alias) not found",
+            code: -405
+        });
+    }
+    if (req.realm) {
+        if (!(req.realm.config && req.realm.config.services[srv])) {
+            return res.json({
+                error: "gate error",
+                message: "service not found for realm",
+                code: -402
+            });
+        }
+        if (!(req.realm.config && req.realm.config.services[srv].enabled)) {
+            return res.json({
+                error: "gate error",
+                message: "service is disabled",
+                code: -403
+            });
+        }
+        var ep = realms_service_instances[realm_name][srv];
+        if (!ep || !ep.http_transport) {
+            return res.json({
+                error: "service error",
+                message: "API does not exist",
+                code: -500
+            });
+        }
+        req.ep = ep.http_transport;
+        req.srv = srv;
+        return next();
+    }
+    else {
+        return res.json({
+            error: "gate error",
+            message: "realm not found (for service)",
+            code: -402
+        });
+    }
+});
+
+realm_router.use("/:ns", (req, res, next) => {
+    res.header("X-Powered-By", "_unfallen_ <" + req.srv + ">")
+    return req.ep.handle(req, res, next);
+});
+
+realm_gate.use("/:realm_id", realm_router);
+
+function realm_io_router(realm, socket) {
+    
+}
+
+function setup_io_transport(io) {
+    io.of((name, query, next) => {
+        name = name.replace("/", "");
+        if (validate_realm(name) && realm_active(name)) {
+            next(null, true);
+        }
+        else {
+            return next(new Error("Realm [" + name + "] does not exist, or has been deactivated."))
+        }
+    }).on('connect', (socket) => {
+        var realm = validate_realm(socket.nsp.name.replace("/", ""));
+        socket.realm = realm;
+        realm_io_router(realm, socket);
+    });
+}
 
 
+module.exports.setup_io_transport = setup_io_transport;
 module.exports.collect_realms = collect_realms;
 module.exports.realms = realms;
 module.exports.validate_realm = validate_realm;
 module.exports.express_routing = express_routing;
 module.exports.post_init = post_init;
+module.exports.realm_service_instances = realms_service_instances;
 
