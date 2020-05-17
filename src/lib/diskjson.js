@@ -6,11 +6,17 @@ var all_disks = {};
 
 module.exports.all = all_disks;
 
-function create(path, name, default_val, readable, is_config) {
+function create(path, name, default_val, readable, is_config, no_hotreload) {
 
+    no_hotreload = no_hotreload || false;
     var file = require('path').resolve(path, name + (is_config ? "" : ".data") + ".json");
     if (all_disks[file]) {
         return all_disks[file];
+    }
+
+    function watched_listener(cur, prev) {
+        // console.log("reloading")
+        load_from_file();
     }
 
     readable = readable == undefined ? true : readable;
@@ -22,6 +28,12 @@ function create(path, name, default_val, readable, is_config) {
         reload: load_from_file
         // destroy: dispose_object <-- you may not destroy while running
     };
+
+    if (!no_hotreload) {
+        fs.watchFile(file, {
+            persistent: false
+        }, watched_listener)
+    }
 
     function dispose_object() {
         self.data.unobserve();
@@ -42,9 +54,9 @@ function create(path, name, default_val, readable, is_config) {
             write_to_file();
         } else {
             try {
-                self.data = JSON.parse(fs.readFileSync(file).toString());
-                STATS.IO++;
+                self.data.root = JSON.parse(fs.readFileSync(file).toString());
             } catch (e) {
+                console.log(e);
                 //read failed
             }
         }
@@ -53,9 +65,9 @@ function create(path, name, default_val, readable, is_config) {
 
     //TODO: throttle write_to_file for better IO
     function write_to_file() {
-        var _data_string = JSON.stringify(self.data);
+        var _data_string = JSON.stringify(self.data.root);
         if (readable) {
-            _data_string = JSON.stringify(self.data, "\t", 4);
+            _data_string = JSON.stringify(self.data.root, "\t", 4);
         }
         try {
             if (fs.existsSync(file)) {

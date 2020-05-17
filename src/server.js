@@ -5,11 +5,21 @@
 
 const config = require("./config");
 const app = require('express')();
+app.use(require("cors")());
+app.use(require("body-parser").json());
 const server = require('http').Server(app);
 const io = require('socket.io')(server);
+io.set('origins', '*:*');
 
-require("./service").collect_services();
-require("./realm").collect_realms();
+var realm = require("./realm");
+var service = require("./service");
+service.collect_services();
+realm.collect_realms();
+
+
+realm.post_init();
 
 server.listen(config.port);
-console.log("Server Starting", config.port);
+console.log("Server Starting on", config.port);
+
+app.use(realm.express_routing);
