@@ -10,7 +10,8 @@ function instance(name, realm, services) {
     });
 
     var io_connection = (socket) => {
-        socket.emit("test", 1)
+        socket.emit("test", "hi from demo service IO endpoint")
+        socket.emit("test", realm)
     };
 
     return {

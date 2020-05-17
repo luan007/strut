@@ -209,7 +209,7 @@ realm_router.use("/:ns/*", (req, res, next) => {
 });
 
 realm_router.use("/:ns", (req, res, next) => {
-    if(!req.ep || !req.srv) {
+    if (!req.ep || !req.srv) {
         return res.json({
             error: "gate error",
             message: "endpoint not found, if you're trying to access index of a namespace, please make sure you have '/' @ the end",
@@ -225,9 +225,12 @@ realm_gate.use("/:realm_id", realm_router);
 function realm_io_router(realm, socket) {
     //a socket comes in, turn in this socket to all ava-ns
     var r_instances = realms_service_instances[realm.name];
-    for(var i in r_instances) {
+    for (var i in r_instances) {
         //setup reroute
-        if(r_instances[i].io_handler) {
+        if (!realm.config.services[i].enabled) {
+            return;
+        }
+        if (r_instances[i].io_handler) {
             r_instances[i].io_handler(socket);
         }
     }

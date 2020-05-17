@@ -1,6 +1,6 @@
 var io = require('socket.io-client');
 
-var client = io("http://localhost:8099/public")
+var client = io("http://localhost:8099/demo")
 client.on("connect", ()=>{
     console.log("Connected");
 });
