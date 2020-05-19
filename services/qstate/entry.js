@@ -12,10 +12,12 @@ function instance(name, realm, services) {
     var config = srv.config;
     var gvars = realm.global_vars;
 
+    var data = {
+        vars: vars
+    };
+
     service_route.get("/", (req, res) => {
-        vars.count = vars.count || 0;
-        vars.count++;
-        res.json(vars);
+        res.json(data);
     });
 
     var io_connection = (socket) => {
