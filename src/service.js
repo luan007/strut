@@ -1,7 +1,7 @@
 var fs = require("fs");
 var config = require("./config");
 var path = require("path");
-var diskjson = require("./lib/diskjson")
+var diskjson = require("../lib/diskjson")
 var service_path = config.service_path;
 
 var services = {
